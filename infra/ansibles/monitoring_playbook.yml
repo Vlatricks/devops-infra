@@ -1,0 +1,71 @@
+---
+- name: Collect facts from all hosts
+  hosts: all
+  gather_facts: yes
+
+- name: Install Node Exporter on Application Host
+  hosts: webservers
+  become: true
+  tasks:
+    - name: Update apt cache and install Node Exporter
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: present
+        update_cache: yes
+
+    - name: Ensure Node Exporter is started and enabled
+      ansible.builtin.service:
+        name: prometheus-node-exporter
+        state: started
+        enabled: yes
+
+
+- name: Setup Prometheus and Grafana on Monitoring Host
+  hosts: monitoring
+  become: true
+  vars:
+    app_server_ip: "84.201.154.129"
+  tasks:
+    - name: Install Docker and Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+        state: present
+        update_cache: yes
+
+    - name: Ensure Docker service is running
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create directory for monitoring configuration
+      ansible.builtin.file:
+        path: /opt/monitoring
+        state: directory
+        mode: '0755'
+
+    - name: Copy Prometheus configuration from template
+      ansible.builtin.template:
+        src: prometheus.yml.j2
+        dest: /opt/monitoring/prometheus.yml
+        mode: '0644'
+
+    - name: Copy Docker Compose configuration from template
+      ansible.builtin.template:
+        src: docker-compose-monitoring.yml.j2
+        dest: /opt/monitoring/docker-compose.yml
+        mode: '0644'
+
+    - name: Tear down existing containers if any
+      ansible.builtin.command:
+        cmd: docker compose down
+        chdir: /opt/monitoring
+      failed_when: false
+
+    - name: Start Prometheus and Grafana via Docker Compose
+      ansible.builtin.command:
+        cmd: docker compose up -d
+        chdir: /opt/monitoring
+

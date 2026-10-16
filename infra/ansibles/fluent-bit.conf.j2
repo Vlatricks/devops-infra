@@ -1,0 +1,31 @@
+[SERVICE]
+    Flush         5
+    Log_Level     info
+    Parsers_File  parsers.conf
+
+[INPUT]
+    Name              tail
+    Path              /var/lib/docker/containers/*/*-json.log
+    Parser            docker
+    Tag               docker.*
+    Path_Key          filepath
+    DB                /fluent-bit/db/tail.db
+    Mem_Buf_Limit     10MB
+    Skip_Long_Lines   On
+    Refresh_Interval  10
+
+[FILTER]
+    Name    record_modifier
+    Match   docker.*
+    Record  host {{ inventory_hostname }}
+
+[OUTPUT]
+    Name                es
+    Match               docker.*
+    Host                {{ hostvars['logs_host'].ansible_host }}
+    Port                9200
+    Logstash_Format     On
+    Logstash_Prefix     app-logs
+    Suppress_Type_Name  On
+    Replace_Dots        On
+    Retry_Limit         False

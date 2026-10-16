@@ -1,0 +1,9 @@
+services:
+  fluent-bit:
+    image: fluent/fluent-bit:3.1
+    container_name: fluent-bit
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /opt/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - /opt/fluent-bit/db:/fluent-bit/db

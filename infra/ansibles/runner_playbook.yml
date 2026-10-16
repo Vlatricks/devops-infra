@@ -1,0 +1,70 @@
+---
+- hosts: runners
+  remote_user: ubuntu
+  become: true
+
+  tasks:
+    - name: Install Docker, Compose and Ansible
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+          - ansible
+        state: present
+        update_cache: true
+
+    - name: Ensure docker service is running and enabled
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Download GitLab Runner repository script
+      ansible.builtin.get_url:
+        url: https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh
+        dest: /tmp/gitlab-runner-repo.sh
+        mode: "0755"
+      register: download_script
+      until: download_script is success
+      retries: 3
+      delay: 5
+
+    - name: Add official GitLab Runner repository
+      ansible.builtin.command: /tmp/gitlab-runner-repo.sh
+      args:
+        creates: /etc/apt/sources.list.d/runner_gitlab-runner.list
+
+    - name: Install GitLab Runner from the official repo
+      ansible.builtin.apt:
+        name: gitlab-runner
+        state: present
+        update_cache: true
+
+    - name: Check GitLab Runner version
+      ansible.builtin.command: gitlab-runner --version
+      register: runner_version
+      changed_when: false
+      failed_when: "'Version:      11.' in runner_version.stdout"
+
+    - name: Add gitlab-runner user to docker group
+      ansible.builtin.user:
+        name: gitlab-runner
+        groups: docker
+        append: true
+
+    - name: Add gitlab-runner to sudoers
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers.d/gitlab-runner
+        line: "gitlab-runner ALL=(ALL) NOPASSWD: ALL"
+        state: present
+        create: true
+        mode: "0440"
+        validate: "/usr/sbin/visudo -cf %s"
+
+    - name: Weekly docker cleanup
+      ansible.builtin.cron:
+        name: docker prune
+        weekday: "0"
+        hour: "3"
+        minute: "0"
+        job: "docker system prune -af >/dev/null 2>&1"

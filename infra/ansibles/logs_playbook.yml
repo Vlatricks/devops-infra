@@ -1,0 +1,91 @@
+---
+- name: Сервер логов (Elasticsearch + Kibana)
+  hosts: logs
+  become: true
+  tasks:
+    - name: Проверить, установлен ли Docker Compose
+      ansible.builtin.command: docker compose version
+      register: compose_check
+      failed_when: false
+      changed_when: false
+      check_mode: false
+ 
+    - name: Установить Docker и Docker Compose
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+        state: present
+        update_cache: true
+      when: compose_check.rc != 0
+ 
+    - name: Включить и запустить Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+ 
+    - name: Задать vm.max_map_count для Elasticsearch
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-elasticsearch.conf
+        content: "vm.max_map_count=262144\n"
+        mode: "0644"
+      register: sysctl_conf
+ 
+    - name: Применить vm.max_map_count
+      ansible.builtin.command: sysctl -w vm.max_map_count=262144
+      when: sysctl_conf.changed
+ 
+    - name: Создать каталог EFK
+      ansible.builtin.file:
+        path: /opt/efk
+        state: directory
+        mode: "0755"
+ 
+    - name: Compose-файл Elasticsearch и Kibana
+      ansible.builtin.template:
+        src: docker-compose-efk.yml.j2
+        dest: /opt/efk/docker-compose.yml
+        mode: "0644"
+ 
+    - name: Запустить Elasticsearch и Kibana
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: /opt/efk
+ 
+- name: Агент сбора логов (Fluent Bit)
+  hosts: log_agents
+  become: true
+  tasks:
+    - name: Создать каталоги агента
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /opt/fluent-bit
+        - /opt/fluent-bit/db
+ 
+    - name: Конфиг Fluent Bit
+      ansible.builtin.template:
+        src: fluent-bit.conf.j2
+        dest: /opt/fluent-bit/fluent-bit.conf
+        mode: "0644"
+      register: fb_conf
+ 
+    - name: Compose-файл Fluent Bit
+      ansible.builtin.template:
+        src: docker-compose-fluent-bit.yml.j2
+        dest: /opt/fluent-bit/docker-compose.yml
+        mode: "0644"
+ 
+    - name: Запустить Fluent Bit
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: /opt/fluent-bit
+ 
+    - name: Перезапустить Fluent Bit после смены конфига
+      ansible.builtin.command: docker compose restart
+      args:
+        chdir: /opt/fluent-bit
+      when: fb_conf.changed

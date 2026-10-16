@@ -1,0 +1,61 @@
+stages:
+  - build
+  - test
+  - deploy_staging
+  - deploy_prod
+
+build_job:
+  stage: build
+  tags:
+    - build
+  script:
+    - cd Final_project
+    - docker build -t skillbox-app:$CI_COMMIT_SHORT_SHA .
+    - docker save -o ../skillbox-app.tar skillbox-app:$CI_COMMIT_SHORT_SHA
+  artifacts:
+    paths:
+      - skillbox-app.tar
+    expire_in: 10 mins
+
+test_job:
+  stage: test
+  tags:
+    - test
+  script:
+    - cd Final_project
+    - chmod +x run-tests.sh
+    - chmod -R +x scripts/
+    - ./run-tests.sh
+
+deploy_stage_job:
+  stage: deploy_staging
+  tags:
+    - deploy
+  script:
+    - chmod 400 $SSH_PRIVATE_KEY
+    - scp -i $SSH_PRIVATE_KEY -o StrictHostKeyChecking=no skillbox-app.tar leon@10.10.10.20:/tmp/skillbox-app.tar
+    - ssh -i $SSH_PRIVATE_KEY -o StrictHostKeyChecking=no leon@10.10.10.20 "docker load -i /tmp/skillbox-app.tar && rm /tmp/skillbox-app.tar"
+    - git clone https://gitlab-ci-token:$CI_TOKEN@gitlab.skillbox.ru/leonid_vlasov_1/service.git
+    - cd service
+    - chmod 400 $SSH_PRIVATE_KEY
+    - ansible-playbook -i inventory.ini site.yml --limit staging --private-key=$SSH_PRIVATE_KEY --extra-vars "service_version=$CI_COMMIT_SHORT_SHA env=staging"
+
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_COMMIT_BRANCH == "uat"'
+
+deploy_prod_job:
+  stage: deploy_prod
+  tags:
+    - deploy
+  script:
+    - chmod 400 $SSH_PRIVATE_KEY
+    - scp -i $SSH_PRIVATE_KEY -o StrictHostKeyChecking=no skillbox-app.tar leon@10.10.10.30:/tmp/skillbox-app.tar
+    - ssh -i $SSH_PRIVATE_KEY -o StrictHostKeyChecking=no leon@10.10.10.30 "docker load -i /tmp/skillbox-app.tar && rm /tmp/skillbox-app.tar"
+    - git clone https://gitlab-ci-token:$CI_TOKEN@gitlab.skillbox.ru/leonid_vlasov_1/service.git
+    - cd service
+    - chmod 400 $SSH_PRIVATE_KEY
+    - ansible-playbook -i inventory.ini site.yml --limit production --private-key=$SSH_PRIVATE_KEY --extra-vars "service_version=$CI_COMMIT_SHORT_SHA env=production"
+    
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'

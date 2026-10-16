@@ -1,0 +1,7 @@
+---
+env: "staging"
+service_name: "skillbox-app-{{ env }}"
+service_image: "skillbox-app"
+service_version: "latest"
+service_port: "8080"
+

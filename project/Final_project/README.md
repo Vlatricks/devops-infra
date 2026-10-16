@@ -1,6 +1,3 @@
-# skillbox-diploma
-Чтобы скопировать репозиторий к себе для работы, вам нужно следовать [этим инструкциям](https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-on-github/duplicating-a-repository#mirroring-a-repository-in-another-location).
-
 ## Runtime
 Приложение отвечает по 3 эндпоинтам:  
 * /health - 200 ok

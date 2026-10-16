@@ -1,0 +1,20 @@
+[Unit]
+Description=Docker container for {{ service_name }}
+After=docker.service
+Requires=docker.service
+
+[Service]
+TimeoutStartSec=0
+Restart=always
+
+ExecStartPre=-/usr/bin/docker stop {{ service_name }}
+ExecStartPre=-/usr/bin/docker rm {{ service_name }}
+
+ExecStart=/usr/bin/docker run --name {{ service_name }} -p {{ service_port }}:{{ service_port }} {{ service_image }}:{{ service_version }}
+
+ExecStop=/usr/bin/docker stop {{ service_name }}
+
+[Install]
+WantedBy=multi-user.target
+
+
